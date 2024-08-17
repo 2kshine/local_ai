@@ -1,0 +1,80 @@
+# Python bytecode files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pyd
+
+# Virtual environment
+.venv/
+env/
+venv/
+ENV/
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+*.egg
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# pytest cache
+.cache/
+*.cover
+*.py,cover
+nosetests.xml
+coverage.xml
+*.coveragerc
+*.hypothesis/
+*.tox/
+*.nox/
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# pytype
+.pytype/
+
+# Cython debug symbols
+cython_debug/
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+# IDEs and editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*.sublime-project
+*.sublime-workspace
+
+# MacOS Finder metadata
+.DS_Store
+
+# Windows thumbnail cache
+Thumbs.db
+
+# Logs and databases
+*.log
+*.sqlite3
+
+# Environment variables file
+.env
+
+# Coverage reports
+.coverage
+*.cover
+
+# Sphinx documentation
+docs/_build/
+
+# PyCharm project files
+*.iml
+*.ipr
+*.iws
