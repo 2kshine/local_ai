@@ -10,12 +10,13 @@ import json
 device = "cpu"
 torch_dtype = torch.float32
 
-model_id = "distil-whisper/distil-large-v3"
+model_id = "openai/whisper-small"
 
+# Initialize model and processor
 model = AutoModelForSpeechSeq2Seq.from_pretrained(
-    model_id, torch_dtype=torch_dtype, low_cpu_mem_usage=True
-)
-model.to(device)
+    model_id, torch_dtype=torch_dtype, low_cpu_mem_usage=True, use_safetensors=True
+).to(device)
+
 
 processor = AutoProcessor.from_pretrained(model_id)
 
@@ -30,7 +31,6 @@ pipe = pipeline(
     torch_dtype=torch_dtype,
     device=device,
 )
-
 
 def resample_audio(audio, original_sr, target_sr=16000):
     """
@@ -71,10 +71,8 @@ def transcribe_audio(audio_data, filename, TRANSCRIBED_DIR, RAW_TRANSCRIBED_DIR)
         transcription = pipe(audio_data["audioFile"], return_timestamps=True)
         pbar.update(1)
         pbar.close()
-    print(f"transcription{transcription}")
-
     #Change file extensions for both transcribed and raw transcribed.
-    basename, ext = os.path.splitext(filename)
+    basename, _ = os.path.splitext(filename)
     filename_chunk = basename + ".json"
     filename_text = basename + ".txt"
     save_transcription(transcription["chunks"], transcription["text"], filename_chunk, filename_text, TRANSCRIBED_DIR, RAW_TRANSCRIBED_DIR)
@@ -94,7 +92,7 @@ def save_transcription(transcription_chunk, transcription_text, filename_chunk, 
         {
             "start": chunk["timestamp"][0],
             "end": chunk["timestamp"][1],
-            "text": chunk["text"],
+            "text": chunk["text"].strip(),
         }
         for chunk in transcription_chunk
     ]

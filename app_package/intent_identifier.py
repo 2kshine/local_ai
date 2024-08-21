@@ -8,8 +8,6 @@ from tqdm import tqdm
 device = "cpu"
 torch_dtype = torch.float32
 model_id_classification = "tasksource/deberta-small-long-nli"
-model_id_sentiment = "avichr/heBERT_sentiment_analysis"
-model_id_emotion = "michellejieli/emotion_text_classifier"
 
 # Load model and tokenizer for classification
 model_classification = AutoModelForSequenceClassification.from_pretrained(
@@ -17,38 +15,12 @@ model_classification = AutoModelForSequenceClassification.from_pretrained(
 ).to(device)
 tokenizer_classification = AutoTokenizer.from_pretrained(model_id_classification)
 
-# Load model and tokenizer for sentiment analysis
-model_sentiment = AutoModelForSequenceClassification.from_pretrained(
-    model_id_sentiment, torch_dtype=torch_dtype, low_cpu_mem_usage=True
-).to(device)
-tokenizer_sentiment = AutoTokenizer.from_pretrained(model_id_sentiment)
-
-# Load model and tokenizer for emotion analysis
-model_emotion = AutoModelForSequenceClassification.from_pretrained(
-    model_id_emotion, torch_dtype=torch_dtype, low_cpu_mem_usage=True
-).to(device)
-tokenizer_emotion = AutoTokenizer.from_pretrained(model_id_emotion)
-
 # Create pipelines
 pipe_classification = pipeline(
     "zero-shot-classification",
     model=model_classification,
     tokenizer=tokenizer_classification,
-    device=0 if torch.cuda.is_available() else -1
-)
-
-pipe_sentiment = pipeline(
-    "sentiment-analysis",
-    model=model_sentiment,
-    tokenizer=tokenizer_sentiment,
-    device=0 if torch.cuda.is_available() else -1
-)
-
-pipe_emotion = pipeline(
-    "sentiment-analysis",
-    model=model_emotion,
-    tokenizer=tokenizer_emotion,
-    device=0 if torch.cuda.is_available() else -1
+    device=device
 )
 
 def load_sentences_from_json(file_path):
@@ -89,18 +61,10 @@ def classifier_func(filename, file_path, save_file_path):
                 # Perform zero-shot classification
                 classification = pipe_classification(sentence_object['text'], keywords)
                 
-                # Perform sentiment analysis
-                sentiments = pipe_sentiment(sentence_object['text'])
-                
-                # Perform emotion analysis
-                emotions = pipe_emotion(sentence_object['text'])
-                
                 # Enrich the sentence object with classification, sentiment, and emotion
                 enriched_sentence = {
                     **sentence_object,
                     'classification': {"label": classification["labels"][0], "score": classification["scores"][0]},
-                    'sentiments': sentiments[0],
-                    'emotions': emotions[0]
                 }
                 
                 # Append to results
