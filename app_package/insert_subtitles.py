@@ -1,45 +1,83 @@
 import ffmpeg
 import os
-
-def generate_ass_subtitles(subtitles_data, output_file):
+import json
+def generate_ass_subtitles(subtitles_data_filepath, output_file):
     """
-    Generate an ASS subtitle file from the given subtitle data.
+    Write subtitles data to an ASS file with animation and position adjustment.
 
-    :param subtitles_data: List of dictionaries containing subtitle information.
+    :param subtitles_data: List of subtitle dictionaries.
     :param output_file: Path to the output ASS file.
     """
-    # Header for the ASS file
-    ass_header = """[Script Info]
-Title: Reels AI Subtitles
-Original Script: Shining Maharjan
-ScriptType: v4.00
-Collisions: Normal
-PlayDepth: 0
+    # ASS file header
+    ass_header = """
+    [Script Info]
+    Title: Example Subtitle
+    Original Script: Assistant
+    ScriptType: v4.00
+    Collisions: Normal
+    PlayDepth: 0
 
-[V4+ Styles]
-Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, TertiaryColour, BackColour, Bold, Italic, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, AlphaLevel, Encoding
-Style: Default,Arial Bold,28,&H00FFFFFF,&H0000FFFF,&H00FF00FF,&H000000FF,1,0,1,1.0,0.0,2,10,10,10,0,1
+    [V4+ Styles]
+    Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, TertiaryColour, BackColour, Bold, Italic, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, AlphaLevel, Encoding
+    Style: Default,Arial,20,&H00FFFFFF,&H000000FF,&H000000FF,&H00000000,0,0,1,1.00,0.00,2,10,10,1344,0,1
 
-[Events]
-"""
-
-    # Convert subtitle data to ASS format with animations
+    [Events]
+    """
+    # Generate ASS subtitle content
     ass_subtitles = ""
-    new_start_time = 0
-    new_end_time = 0
+    with open(subtitles_data_filepath, 'r') as file:
+        subtitles_data = json.load(file)
     for subtitle in subtitles_data:
-        start_time = format_time(new_start_time - 3)
-        new_end_time = new_start_time + (subtitle["end"] - subtitle["start"])
-        end_time = format_time(new_end_time - 3)
-        new_start_time = new_end_time
-        text = subtitle["text"].replace('\n', '\\N')
-        # Add fade-in and fade-out animation
-        ass_subtitles += f"Dialogue: Marked=0,{start_time},{end_time},Default,,0,0,0,,{text}\n"
-    
+        try:
+            # Convert start and end times to float
+            start_time = float(subtitle["start"])
+            end_time = float(subtitle["end"])
+
+            # Ensure text is a string
+            text = str(subtitle["text"]).replace('\n', '\\N')
+
+            #Calculate the duration for the subtitle
+            total_duration = end_time - start_time
+
+
+            # Define pop_duration and shrink_duration as fractions of total_duration
+            pop_duration = total_duration * 0.25  # 25% of total duration
+            shrink_duration = total_duration * 0.25  # 25% of total duration
+            
+            # Convert durations to milliseconds for animation
+            pop_duration_ms = pop_duration * 1000
+            shrink_duration_ms = shrink_duration * 1000
+
+            # Define the keyframes for animation
+            animation = (
+                f"{{\\an8\\1c&HFFFFFF&\\fs40\\bord1\\shad0"
+                f"\\t(0,{pop_duration_ms},\\fscx120)\\t({pop_duration_ms},{pop_duration_ms+shrink_duration_ms},\\fscx100)}}"
+            )
+
+            # Format times for ASS
+            start_time_ass = format_time(start_time)
+            end_time_ass = format_time(end_time)
+
+            # Add fade-in and fade-out animation
+            ass_subtitles += f"Dialogue: Marked=0,{start_time_ass},{end_time_ass},Default,,0,0,0,,{animation}{text}\n"
+
+        except KeyError as e:
+            print(f"Missing key in subtitle data: {e}")
+        except Exception as e:
+            print(f"Error processing subtitle entry: {e}")
+
+    # Output file path
+
     # Write the ASS file
-    with open(output_file, 'w') as f:
-        f.write(ass_header)
-        f.write(ass_subtitles)
+    try:
+        with open(output_file, 'w') as f:
+            f.write(ass_header)
+            f.write(ass_subtitles)
+
+        print(f"ASS file saved successfully to {output_file}")
+
+    except Exception as e:
+        print(f"Error saving ASS file: {e}")
 
 def format_time(seconds):
     """
@@ -63,7 +101,7 @@ def add_subtitles(video_file, subtitles_file, output_file):
     """
     ffmpeg.input(video_file).output(output_file, vf=f'subtitles={subtitles_file}').run()
 
-def generate_subtitles(subtitles_data, filename):
+def generate_subtitles(subtitles_data_filepath, filename):
     # Generate subtitles
-    generate_ass_subtitles(subtitles_data, filename)
+    generate_ass_subtitles(subtitles_data_filepath, filename)
     print(f'Subtitles saved to {filename}')

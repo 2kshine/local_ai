@@ -6,6 +6,7 @@ import torch
 import numpy as np
 from tqdm import tqdm
 import json
+import whisper_timestamped
 
 device = "cpu"
 torch_dtype = torch.float32
@@ -55,11 +56,10 @@ def load_audio(file_path):
             audio = np.mean(audio, axis=1)
         if sampling_rate != 16000:
             audio = resample_audio(audio, sampling_rate)
-            sampling_rate = 16000
     except Exception as e:
         raise ValueError(f"Failed to read or process the file: {e}")
 
-    return {"audioFile": audio, "sampling_rate": sampling_rate}
+    return {"audioFile": audio, "original_sampling_rate": sampling_rate}
 
 
 def transcribe_audio(audio_data, filename, TRANSCRIBED_DIR, RAW_TRANSCRIBED_DIR):
@@ -76,8 +76,6 @@ def transcribe_audio(audio_data, filename, TRANSCRIBED_DIR, RAW_TRANSCRIBED_DIR)
     filename_chunk = basename + ".json"
     filename_text = basename + ".txt"
     save_transcription(transcription["chunks"], transcription["text"], filename_chunk, filename_text, TRANSCRIBED_DIR, RAW_TRANSCRIBED_DIR)
-    return [transcription["chunks"], transcription["text"]]
-
 
 def save_transcription(transcription_chunk, transcription_text, filename_chunk, filename_text, TRANSCRIBED_DIR, RAW_TRANSCRIBED_DIR):
     """
@@ -108,3 +106,34 @@ def save_transcription(transcription_chunk, transcription_text, filename_chunk, 
         print(f"Transcription saved to {file_path_chunk} and {file_path_text}")
     except Exception as e:
         print(f"Error saving transcription: {e}")
+
+def extract_words(audioFilePath, filename_words):
+    model = whisper_timestamped.load_model("small.en", device="cpu")
+    with torch.no_grad():
+        pbar = tqdm(total=1, desc="Transcribing", unit="step", dynamic_ncols=True)
+        audio = whisper_timestamped.load_audio(audioFilePath)
+        transcribedWords = whisper_timestamped.transcribe(model, audio, language="en")
+        print(transcribedWords)
+        pbar.update(1)  # Update progress bar
+        pbar.close()  # Close progress bar
+    #Change file extensions for both transcribed and raw transcribed.
+    try:
+        extracted_data = []
+        for segment in transcribedWords['segments']:
+            for word in segment['words']:
+                extracted_data.append({
+                    'text': word['text'],
+                    'start': word['start'],
+                    'end': word['end']
+                })
+        
+        # Convert list to JSON-formatted string
+        json_data = json.dumps(extracted_data, indent=4)
+
+        # Open the file in write mode and write the string to it
+        with open(filename_words, 'w') as file:
+            file.write(json_data)
+        print(f"Words extracted, saved to {filename_words}")
+    except Exception as e:
+        print(f"Error saving transcription: {e}")
+

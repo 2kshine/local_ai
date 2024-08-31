@@ -44,6 +44,10 @@ def save_transcription(intent_result, filename, INTENT_DIR):
     except Exception as e:
         print(f"Error saving Intent file: {e}")
 
+def zero_shot_indentify(text, keywords):
+    # Perform zero-shot classification
+    return pipe_classification(text, keywords)
+
 def classifier_func(filename, file_path, save_file_path):
     """Classify the intent, sentiment, and emotion of sentences from a JSON file."""
     sentence_list = load_sentences_from_json(file_path)
@@ -58,8 +62,8 @@ def classifier_func(filename, file_path, save_file_path):
         try:
             # Ensure sentence_object is a dictionary with a 'text' field
             if isinstance(sentence_object, dict) and 'text' in sentence_object:
-                # Perform zero-shot classification
-                classification = pipe_classification(sentence_object['text'], keywords)
+                classification = zero_shot_indentify(sentence_object['text'], keywords)
+
                 
                 # Enrich the sentence object with classification, sentiment, and emotion
                 enriched_sentence = {

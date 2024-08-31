@@ -6,7 +6,7 @@ from tqdm import tqdm
 device = "cpu"
 torch_dtype = torch.float32
 model_id_sentiment = "avichr/heBERT_sentiment_analysis"
-model_id_emotion = "michellejieli/emotion_text_classifier"
+model_id_emotion = "SamLowe/roberta-base-go_emotions"
 
 # Load model and tokenizer for sentiment analysis
 model_sentiment = AutoModelForSequenceClassification.from_pretrained(
@@ -35,9 +35,6 @@ pipe_emotion = pipeline(
 )
 
 def emotion_func(segment):
-    # Initialize progress bar
-    pbar = tqdm(total=len(segment), desc="Classifying sentiment and emotion", unit="sentence")
-    
     sentiments = []
     emotions = []
     
@@ -50,10 +47,5 @@ def emotion_func(segment):
             
     except Exception as e:
         print(f"Error processing sentence. Error: {e}")
-    finally:
-        # Update progress bar
-        pbar.update(1)
-        # Close progress bar
-        pbar.close()
     
     return {'sentiments': sentiments[0], 'emotions': emotions[0]}
