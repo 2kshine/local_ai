@@ -5,9 +5,11 @@ from moviepy.editor import VideoFileClip, ImageSequenceClip
 import random
 import json
 import subprocess
+from app_package.directory_helper import REELS_BLUEPRINT, RAW_VIDEO_DIR, CROPPED_VIDEO_DIR, PROCESSED_VIDEO_DIR, FRAMES_FOLDER_DIR, AUDIO_DIR, IMAGE_GENERATION_DIR, WORDS_EXTRACTION_DIR,FINAL_VIDEO_DIR
+from pydub import AudioSegment
 
 from app_package.split_av import (
-    splitAV_func
+    splitAV_func_for_video_process
 )
 from app_package.image_generation import (
     animate_image
@@ -26,7 +28,9 @@ from app_package.transcriber import (
     extract_words
 )
 from app_package.stitch_transition import (
-    stitch_transition
+    stitch_transition,
+    has_audio_track,
+    extract_audio
 )
 
 GLOBAL_FOCUS_BOX = None
@@ -235,11 +239,12 @@ def handle_image_action (text, image_gen_dir, reels_processed_dir, duration):
         print(f"Error found while handle_image_action from random_file_path {random_file_path}: {e}")
         raise e
 
-def stitch_transition_helper(action_json, processed_path, individual_directory_name, transitions_directory):
+def stitch_transition_helper(action_json, processed_path, individual_directory_name):
     global ACTION_STATUS
+    files_to_delete = []
     if not processed_path:
         raise ValueError("No video files found in the directory.")
-    print(action_json)
+    print(f"action_json: {action_json}")
     #action_json first index is action second is end time
     try:
         for index, action in enumerate(action_json):
@@ -255,42 +260,50 @@ def stitch_transition_helper(action_json, processed_path, individual_directory_n
                 currentClip = individual_directory_name +'_' + str(index) + '.mp4'
                 previousClip_directory = os.path.join(processed_path, previousClip)
                 currentClip_directory = os.path.join(processed_path, currentClip)
-                stitch_transition(str(index - 1), str(index), previousClip_directory, currentClip_directory, transitions_directory)
+                file_to_delete = stitch_transition(str(index - 1), str(index), previousClip_directory, currentClip_directory)
+                if(file_to_delete):
+                    files_to_delete.append(file_to_delete)
             ACTION_STATUS = action
     except Exception as e:
         print(f"Error stitching transaction helpers {processed_path}: {e}")
         raise e
+
+    #Delete previous files.
+    for file_path_to_delete in files_to_delete:
+        os.remove(file_path_to_delete)
 # Main processing function
-def video_process(input_video, cropped_video_dir, processed_video_dir, filename, reels_script_path, FRAMES_FOLDER_DIR, AUDIO_DIR, IMAGE_GENERATION_DIR, EXTRACTED_WORDS_DIR):
+def video_process(filename, reels_script_path):
+    input_video = os.path.join(RAW_VIDEO_DIR, filename)
 
     # Load the json script 
     # Open the JSON file for reading
     with open(reels_script_path, 'r') as file:
         # Load JSON data from the file
         reels_script = json.load(file)
+    print(f"reels_script: {reels_script}")
     reels_video_script = reels_script[0]
     reels_result_script = reels_script[1]
 
     basename, ext = os.path.splitext(filename)
-    individual_directory_name = basename + '_' + reels_result_script['id']
-    filename_unique = individual_directory_name + ext
+    individual_directory_name = basename + '_' + reels_result_script['id'] #directory name for processed video
+    filename_unique = individual_directory_name + ext # Unique filename
     filename_unique_segments = individual_directory_name + '_cropped' + ext
     extract_audio_filename = individual_directory_name + '.mp3'
     extract_words_filename = individual_directory_name + '.json'
 
     # Crop the raw video according to the start time and end time seconds 
-    cropped_video_path = os.path.join(cropped_video_dir, filename_unique)
-    cropped_video_path_segments = os.path.join(cropped_video_dir, filename_unique_segments)
-    processed_path = os.path.join(processed_video_dir, individual_directory_name)
+    cropped_video_path = os.path.join(CROPPED_VIDEO_DIR, filename_unique)
+    cropped_video_path_segments = os.path.join(CROPPED_VIDEO_DIR, filename_unique_segments)
+    processed_path = os.path.join(PROCESSED_VIDEO_DIR, individual_directory_name)
     cropped_video_audio_extract_path = os.path.join(AUDIO_DIR, extract_audio_filename)
-    extract_words_filepath = os.path.join(EXTRACTED_WORDS_DIR, extract_words_filename)
-    transitions_directory = os.path.join(processed_video_dir, 'transitions')
+    extract_words_filepath = os.path.join(WORDS_EXTRACTION_DIR, extract_words_filename)
+
+    # If no directory in processed path for each reels create one 
     if not os.path.exists(processed_path):
         os.makedirs(processed_path)
-    # If no directory in processed path for each reels create one 
 
+    # Crop the video to the specified time range if the file doesnt already exist
     # try:
-    #     # Crop the video to the specified time range if the file doesnt already exist
     #     if not (os.path.isfile(cropped_video_path)):
     #         start_time_sec = reels_result_script['results']['period']['startTime']
     #         end_time_sec = reels_result_script['results']['period']['endTime']
@@ -299,11 +312,10 @@ def video_process(input_video, cropped_video_dir, processed_video_dir, filename,
     #     print(f"Error found while cropping {filename}: {e}")
     #     raise e
     
-    # Get audio files to be transcribed in words 
+    # Split Audio and video of a raw video if the file doesnt already exist
     # try:
-    #     # Split Audio and video of a raw video if the file doesnt already exist
     #     if not (os.path.isfile(cropped_video_audio_extract_path)):
-    #         extractedAudioFilePath = splitAV_func(cropped_video_path, cropped_video_audio_extract_path)
+    #         extractedAudioFilePath = splitAV_func_for_video_process(cropped_video_path, cropped_video_audio_extract_path)
     # except Exception as e:
     #     print(f"Error found while splitting cropped video to audio {filename}: {e}")
     #     raise e
@@ -314,26 +326,31 @@ def video_process(input_video, cropped_video_dir, processed_video_dir, filename,
     
     # #Loop through each segment, check the action, ignore the first two segment and extract frames and process them 
     # for index, firstTwoSeg in enumerate(reels_video_script[:2]):
-    #     video_process_helper(individual_directory_name,index,processed_path, firstTwoSeg, cropped_video_path, cropped_video_path_segments, FRAMES_FOLDER_DIR,IMAGE_GENERATION_DIR, filename)
+    #     video_process_helper(individual_directory_name,index,processed_path, firstTwoSeg, cropped_video_path, cropped_video_path_segments, filename)
     
     # for index, restSeg in enumerate(reels_video_script):
-    #     video_process_helper(individual_directory_name,index,processed_path, restSeg, cropped_video_path, cropped_video_path_segments, FRAMES_FOLDER_DIR,IMAGE_GENERATION_DIR, filename)
+    #     print(restSeg)
+    #     video_process_helper(individual_directory_name,index,processed_path, restSeg, cropped_video_path, cropped_video_path_segments, filename)
 
     #Remove all cropped files 
-    # for file in os.listdir(cropped_video_dir):
-    #     os.remove(os.path.join(cropped_video_dir, file))
+    # for file in os.listdir(CROPPED_VIDEO_DIR):
+    #     os.remove(os.path.join(CROPPED_VIDEO_DIR, file))
 
-    # Figure out the transition times for all the video segments
-    try:
-        # Creating the action_json
-        action_json = [
-            entry.get('action')
-            for entry in reels_video_script
-        ]        
-        stitch_transition_helper(action_json, processed_path, individual_directory_name, transitions_directory)
-    except Exception as e:
-        print(f"Error found while stitching transitions {filename}: {e}")
-        raise e
+    # # Figure out the transition times for all the video segments
+    # try:
+    #     # Creating the action_json
+    #     action_json = [
+    #         entry.get('action')
+    #         for entry in reels_video_script
+    #     ]        
+    #     stitch_transition_helper(action_json, processed_path, individual_directory_name)
+    # except Exception as e:
+    #     print(f"Error found while stitching transitions {filename}: {e}")
+    #     raise e
+
+    #Stitch all the clips and figure out if there are any transitions
+    stitch_video_output(individual_directory_name, processed_path)
+
     # Create substitles based on extracted audio words.
     # try:
     #     # Extract words from the extracted audio
@@ -348,7 +365,7 @@ def video_process(input_video, cropped_video_dir, processed_video_dir, filename,
 
     print(f'Video processed and optimized')
 
-def video_process_helper(individual_directory_name,index,processed_path, segments, cropped_video_path, cropped_video_path_segments, FRAMES_FOLDER_DIR,IMAGE_GENERATION_DIR, filename):
+def video_process_helper(individual_directory_name,index,processed_path, segments, cropped_video_path, cropped_video_path_segments, filename):
     try:
         uniqueFileName = individual_directory_name +'_' + str(index) + '.mp4'
         reels_processed_directory = os.path.join(processed_path, uniqueFileName)
@@ -356,7 +373,7 @@ def video_process_helper(individual_directory_name,index,processed_path, segment
         # Crop the already cropped video and do the following
         start_time_sec = segments['start']
         end_time_sec = segments['end']
-        duration = segments['end'] - segments['start']
+        duration = end_time_sec - start_time_sec
         action = segments['action']
         
         if action == "IMAGE":
@@ -365,20 +382,117 @@ def video_process_helper(individual_directory_name,index,processed_path, segment
             # Sentence to input as prompt for image generation
             # image_prompt = f"In a {firstTwoSeg['emotion']} emotion and with a {firstTwoSeg['sentiment']} sentiment, the scene is {firstTwoSeg['text']}" 
             
-            if not (os.path.isfile(cropped_video_path_segments)):
-                #Crop video based on start and end time of the segment
-                crop_video(cropped_video_path, cropped_video_path_segments, start_time_sec, end_time_sec)
+            #Crop video based on start and end time of the segment
+            crop_video(cropped_video_path, cropped_video_path_segments, start_time_sec, end_time_sec)
             
             # Extract and process frames in the frames folder
             extract_and_process_frames(cropped_video_path_segments, FRAMES_FOLDER_DIR, action)
 
-            if not (os.path.isfile(reels_processed_directory)):
-                # Combine processed frames into a video
-                create_video_from_frames(reels_processed_directory, FRAMES_FOLDER_DIR)
+            # Combine processed frames into a video
+            create_video_from_frames(reels_processed_directory, FRAMES_FOLDER_DIR)
 
             for file in os.listdir(FRAMES_FOLDER_DIR):
                 os.remove(os.path.join(FRAMES_FOLDER_DIR, file))
+            
+            #Remove Cropped segment video 
+            os.remove(cropped_video_path_segments)
+            
 
     except Exception as e:
         print(f"Error found while extracting and processing video {filename}: {e}")
         raise e
+
+def stitch_video_output(individual_directory_name, processed_path):
+    final_video_filename = individual_directory_name + '.mp4'
+    video_output_path = os.path.join(FINAL_VIDEO_DIR, final_video_filename)
+    transitions_dir = os.path.join(PROCESSED_VIDEO_DIR, 'transitions')
+    
+    files_to_skip = -1 #Number to always satisfy true at first
+
+    video_files = [f for f in os.listdir(processed_path) if f.endswith(('.mp4'))]
+    video_files.sort() #ascending order
+
+    # Initialize the output path for the first video
+    current_output = os.path.join(processed_path, video_files[0])
+
+    # Get all the files in the directory
+    for index in range(len(video_files) - 1):
+        next_input = os.path.join(processed_path, video_files[index + 1])
+        if index + 1 > files_to_skip and os.path.exists(next_input):
+            # Check if the current index and next index belongs to any transitions 
+            for transition_file in os.listdir(transitions_dir):
+                basename, _ = os.path.splitext(transition_file)
+                parts = basename.split('_')
+                
+                if str(index + 1) in parts[2]:
+                    transition_file_select = os.path.join(transitions_dir, transition_file)
+                    next_input = transition_file_select
+                    print()
+                    files_to_skip = int(parts[2][-1])
+                    break
+            
+            # Do the stitching here with a temporary file 
+            print(current_output)
+            print(next_input)
+            current_output = video_output_path
+            try:
+                # Check if the current and next input files have audio streams
+                next_has_audio = has_audio_track(next_input)
+                current_has_audio = has_audio_track(current_output)
+
+                print(f'next_has_audio: {next_has_audio}')
+                print(f'next_has_audio: {current_has_audio}')
+
+                audio1_path = 'audio1.wav'
+                audio2_path = 'audio2.wav'
+                if current_has_audio:
+                    extract_audio(current_output, audio1_path)
+                if next_has_audio:
+                    extract_audio(next_input, audio2_path)
+
+                # Construct the FFmpeg filter_complex string based on audio presence
+                if next_has_audio and current_has_audio:
+                    filter_complex = '[0:v][0:a][1:v][1:a]concat=n=2:v=1:a=1[v][a]'
+                    map_options = ['-map', '[v]', '-map', '[a]']
+                    inputs = ['-i', current_output, '-i', next_input, '-i', audio1_path, '-i', audio2_path]
+                
+                elif next_has_audio and not current_has_audio:
+                    filter_complex = '[0:v][1:v][1:a]concat=n=2:v=1:a=0[v][a]'
+                    map_options = ['-map', '[v]', '-map', '[a]']
+                    inputs = ['-i', current_output, '-i', next_input, '-i', audio2_path]
+                
+                elif not next_has_audio and current_has_audio:
+                    filter_complex = '[0:v][0:a][1:v]concat=n=2:v=1:a=0[v][a]'
+                    map_options = ['-map', '[v]', '-map', '[a]']
+                    inputs = ['-i', current_output, '-i', next_input, '-i', audio1_path]
+                
+                else:  # Neither has audio
+                    filter_complex = '[0:v][1:v]concat=n=2:v=1:a=0[v][a]'
+                    map_options = ['-map', '[v]']
+                    inputs = ['-i', current_output, '-i', next_input]
+
+                # FFmpeg command setup
+                ffmpeg_command = [
+                    'ffmpeg',
+                    *inputs,
+                    '-filter_complex', filter_complex,
+                    *map_options,
+                    '-c:v', 'libx264',
+                    '-preset', 'veryslow',
+                    '-y',                           # Overwrite output file if exists
+                    video_output_path
+                ]
+                
+                # Execute the FFmpeg command
+                subprocess.run(ffmpeg_command, check=True)
+                
+                # Update current_output to the video_output_path for the next iteration
+                current_output = video_output_path
+                print(f"Successfully concatenated until index {index}")
+                
+            except subprocess.CalledProcessError as e:
+                print("Error occurred while applying crossfade:", e)
+            except Exception as e:
+                print("An unexpected error occurred:", e)
+
+                

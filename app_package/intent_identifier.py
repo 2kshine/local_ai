@@ -3,6 +3,7 @@ import json
 from transformers import AutoTokenizer, AutoModelForSequenceClassification, pipeline
 import torch
 from tqdm import tqdm
+from app_package.directory_helper import TRANSCRIBED_DIR, INTENT_IDENTIFY_DIR
 
 # Setup device and model
 device = "cpu"
@@ -29,12 +30,11 @@ def load_sentences_from_json(file_path):
         data = json.load(file)
     return data
 
-def save_transcription(intent_result, filename, INTENT_DIR):
+def save_transcription(intent_result, filename):
     """
     Save the transcription text to a file in the TRANSCRIBED_DIR directory.
     """
-    os.makedirs(INTENT_DIR, exist_ok=True)
-    file_path = os.path.join(INTENT_DIR, filename)
+    file_path = os.path.join(INTENT_IDENTIFY_DIR, filename)
 
     json_string = json.dumps(intent_result, indent=4)
     try:
@@ -48,8 +48,12 @@ def zero_shot_indentify(text, keywords):
     # Perform zero-shot classification
     return pipe_classification(text, keywords)
 
-def classifier_func(filename, file_path, save_file_path):
+def classifier_func(filename):
     """Classify the intent, sentiment, and emotion of sentences from a JSON file."""
+    file_path = os.path.join(TRANSCRIBED_DIR, filename)
+    if not os.path.exists(file_path):
+        print(f"Error processing sentence: {sentence_object}. Error: {e}")
+        raise e 
     sentence_list = load_sentences_from_json(file_path)
     keywords = ["Finance"]
 
@@ -76,6 +80,7 @@ def classifier_func(filename, file_path, save_file_path):
                 
         except Exception as e:
             print(f"Error processing sentence: {sentence_object}. Error: {e}")
+            raise e
 
         # Update progress bar
         pbar.update(1)
@@ -83,5 +88,5 @@ def classifier_func(filename, file_path, save_file_path):
     # Close progress bar
     pbar.close()
     
-    save_transcription(results, filename, save_file_path)
+    save_transcription(results, filename)
 

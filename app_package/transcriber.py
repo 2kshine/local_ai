@@ -7,10 +7,11 @@ import numpy as np
 from tqdm import tqdm
 import json
 import whisper_timestamped
+from app_package.directory_helper import TRANSCRIBED_DIR, RAW_TRANSCRIBED_DIR, AUDIO_DIR
 
 device = "cpu"
 torch_dtype = torch.float32
-
+FPS = 30
 model_id = "openai/whisper-small"
 
 # Initialize model and processor
@@ -43,10 +44,12 @@ def resample_audio(audio, original_sr, target_sr=16000):
     return resample(audio, number_of_samples)
 
 
-def load_audio(file_path):
+
+def load_audio(filename):
     """
     Load and return audio data and its sampling rate from a local audio file.
     """
+    file_path = os.path.join(AUDIO_DIR, filename)
     if not os.path.isfile(file_path):
         raise FileNotFoundError(f"The file at path {file_path} does not exist.")
     
@@ -62,7 +65,7 @@ def load_audio(file_path):
     return {"audioFile": audio, "original_sampling_rate": sampling_rate}
 
 
-def transcribe_audio(audio_data, filename, TRANSCRIBED_DIR, RAW_TRANSCRIBED_DIR):
+def transcribe_audio(audio_data, filename):
     """
     Transcribe the given audio data using the pipeline.
     """
@@ -75,14 +78,12 @@ def transcribe_audio(audio_data, filename, TRANSCRIBED_DIR, RAW_TRANSCRIBED_DIR)
     basename, _ = os.path.splitext(filename)
     filename_chunk = basename + ".json"
     filename_text = basename + ".txt"
-    save_transcription(transcription["chunks"], transcription["text"], filename_chunk, filename_text, TRANSCRIBED_DIR, RAW_TRANSCRIBED_DIR)
+    save_transcription(transcription["chunks"], transcription["text"], filename_chunk, filename_text)
 
-def save_transcription(transcription_chunk, transcription_text, filename_chunk, filename_text, TRANSCRIBED_DIR, RAW_TRANSCRIBED_DIR):
+def save_transcription(transcription_chunk, transcription_text, filename_chunk, filename_text):
     """
     Save the transcription text to a file in the TRANSCRIBED_DIR directory.
     """
-    os.makedirs(TRANSCRIBED_DIR, exist_ok=True)
-    os.makedirs(RAW_TRANSCRIBED_DIR, exist_ok=True)
     file_path_chunk = os.path.join(TRANSCRIBED_DIR, filename_chunk)
     file_path_text = os.path.join(RAW_TRANSCRIBED_DIR, filename_text)
 
