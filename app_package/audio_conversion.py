@@ -72,9 +72,6 @@ def main():
     try:
         # Load audio file
         audio_sample = load_audio(audio_file_path)
-        print("Audio loaded successfully.")
-        print("Audio Array:", audio_sample["array"])
-        print("Sampling Rate:", audio_sample["sampling_rate"])
     except Exception as e:
         print("An error occurred:", e)
 

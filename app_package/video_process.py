@@ -1,12 +1,13 @@
 import os
 import numpy as np
 from PIL import Image, ImageOps
-from moviepy.editor import VideoFileClip, ImageSequenceClip
+from moviepy.editor import VideoFileClip, ImageSequenceClip, AudioFileClip, concatenate_videoclips
 import random
 import json
 import subprocess
 from app_package.directory_helper import REELS_BLUEPRINT, RAW_VIDEO_DIR, CROPPED_VIDEO_DIR, PROCESSED_VIDEO_DIR, FRAMES_FOLDER_DIR, AUDIO_DIR, IMAGE_GENERATION_DIR, WORDS_EXTRACTION_DIR,FINAL_VIDEO_DIR
 from pydub import AudioSegment
+import ffmpeg
 
 from app_package.split_av import (
     splitAV_func_for_video_process
@@ -30,7 +31,11 @@ from app_package.transcriber import (
 from app_package.stitch_transition import (
     stitch_transition,
     has_audio_track,
+    get_duration,
     extract_audio
+)
+from app_package.background_audio_process import (
+    process_audio
 )
 
 GLOBAL_FOCUS_BOX = None
@@ -280,7 +285,6 @@ def video_process(filename, reels_script_path):
     with open(reels_script_path, 'r') as file:
         # Load JSON data from the file
         reels_script = json.load(file)
-    print(f"reels_script: {reels_script}")
     reels_video_script = reels_script[0]
     reels_result_script = reels_script[1]
 
@@ -298,11 +302,11 @@ def video_process(filename, reels_script_path):
     cropped_video_audio_extract_path = os.path.join(AUDIO_DIR, extract_audio_filename)
     extract_words_filepath = os.path.join(WORDS_EXTRACTION_DIR, extract_words_filename)
 
-    # If no directory in processed path for each reels create one 
-    if not os.path.exists(processed_path):
-        os.makedirs(processed_path)
+    # # If no directory in processed path for each reels create one 
+    # if not os.path.exists(processed_path):
+    #     os.makedirs(processed_path)
 
-    # Crop the video to the specified time range if the file doesnt already exist
+    # # Crop the video to the specified time range if the file doesnt already exist
     # try:
     #     if not (os.path.isfile(cropped_video_path)):
     #         start_time_sec = reels_result_script['results']['period']['startTime']
@@ -312,7 +316,7 @@ def video_process(filename, reels_script_path):
     #     print(f"Error found while cropping {filename}: {e}")
     #     raise e
     
-    # Split Audio and video of a raw video if the file doesnt already exist
+    # # Split Audio and video of a raw video if the file doesnt already exist
     # try:
     #     if not (os.path.isfile(cropped_video_audio_extract_path)):
     #         extractedAudioFilePath = splitAV_func_for_video_process(cropped_video_path, cropped_video_audio_extract_path)
@@ -320,7 +324,7 @@ def video_process(filename, reels_script_path):
     #     print(f"Error found while splitting cropped video to audio {filename}: {e}")
     #     raise e
 
-    #Always set the first segment and last segment to be a Normal Action
+    # # Always set the first segment and last segment to be a Normal Action
     # reels_video_script[0]['action'] = "NORMAL"
     # reels_video_script[-1]['action'] = "NORMAL"
     
@@ -332,9 +336,9 @@ def video_process(filename, reels_script_path):
     #     print(restSeg)
     #     video_process_helper(individual_directory_name,index,processed_path, restSeg, cropped_video_path, cropped_video_path_segments, filename)
 
-    #Remove all cropped files 
-    # for file in os.listdir(CROPPED_VIDEO_DIR):
-    #     os.remove(os.path.join(CROPPED_VIDEO_DIR, file))
+    # # Remove all cropped files 
+    # # for file in os.listdir(CROPPED_VIDEO_DIR):
+    # #     os.remove(os.path.join(CROPPED_VIDEO_DIR, file))
 
     # # Figure out the transition times for all the video segments
     # try:
@@ -348,10 +352,16 @@ def video_process(filename, reels_script_path):
     #     print(f"Error found while stitching transitions {filename}: {e}")
     #     raise e
 
-    #Stitch all the clips and figure out if there are any transitions
+    # #Stitch all the clips and figure out if there are any transitions
     stitch_video_output(individual_directory_name, processed_path)
 
-    # Create substitles based on extracted audio words.
+    #Configure background music based on total video length 
+    # process_audio(f'{individual_directory_name}_background.mp3', reels_video_script[-1]['end'])
+
+    #Stitch final video output with the audio 
+    # stitch_all_audios(individual_directory_name, )
+
+    # # Create substitles based on extracted audio words.
     # try:
     #     # Extract words from the extracted audio
     #     if not (os.path.isfile(extract_words_filepath)):
@@ -359,10 +369,10 @@ def video_process(filename, reels_script_path):
     # except Exception as e:
     #     print(f"Error found while extracting words from audio {filename}: {e}")
     #     raise e
+
+
+
     # Clean up temporary audio, temp video and subtitles directory
-
-    # Based on emotions of the whole segment, add a song to it.
-
     print(f'Video processed and optimized')
 
 def video_process_helper(individual_directory_name,index,processed_path, segments, cropped_video_path, cropped_video_path_segments, filename):
@@ -402,97 +412,126 @@ def video_process_helper(individual_directory_name,index,processed_path, segment
         print(f"Error found while extracting and processing video {filename}: {e}")
         raise e
 
-def stitch_video_output(individual_directory_name, processed_path):
-    final_video_filename = individual_directory_name + '.mp4'
-    video_output_path = os.path.join(FINAL_VIDEO_DIR, final_video_filename)
-    transitions_dir = os.path.join(PROCESSED_VIDEO_DIR, 'transitions')
-    
-    files_to_skip = -1 #Number to always satisfy true at first
+def add_silence(video_path, output_path, duration):
+    try:
+        # Generate a silent audio track with the same duration as the video
+        silence_audio = 'silence.mp3'
+        command = [
+            'ffmpeg', '-f', 'lavfi', '-t', str(duration), '-i', 'anullsrc=r=48000:cl=stereo', '-q:a', '9', '-acodec', 'libmp3lame', silence_audio
+        ]
+        subprocess.run(command, capture_output=True, text=True, check=True)
+        
+        # Combine video with silent audio
+        command = [
+            'ffmpeg', '-i', video_path, '-i', silence_audio, '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', output_path
+        ]
+        subprocess.run(command, capture_output=True, text=True, check=True)
+    except subprocess.CalledProcessError as e:
+        print(f"Error adding silence: {e.stderr}")
+    finally:
+        # Clean up the temporary silence file
+        if os.path.exists(silence_audio):
+            os.remove(silence_audio)
 
-    video_files = [f for f in os.listdir(processed_path) if f.endswith(('.mp4'))]
-    video_files.sort() #ascending order
+def stitch_video_output(individual_directory_name, processed_path):
+
+    TRANSITIONS_DIR = os.path.join(PROCESSED_VIDEO_DIR, "transitions")
+    final_video_filename = f"{individual_directory_name}.mp4"
+    video_output_path = os.path.join(FINAL_VIDEO_DIR, final_video_filename)
+
+    video_files = [f for f in os.listdir(processed_path) if f.endswith(".mp4")]
+    video_files.sort()  # Ascending order
+
+    target_bitrate = "10000k"  # 10 Mbps for 1080p HD
+    bufsize = f"{2 * int(target_bitrate[:-1])}k"  # Dynamic buffer size
 
     # Initialize the output path for the first video
-    current_output = os.path.join(processed_path, video_files[0])
+    current_output_path = os.path.join(processed_path, video_files[0])
 
-    # Get all the files in the directory
-    for index in range(len(video_files) - 1):
-        next_input = os.path.join(processed_path, video_files[index + 1])
-        if index + 1 > files_to_skip and os.path.exists(next_input):
-            # Check if the current index and next index belongs to any transitions 
-            for transition_file in os.listdir(transitions_dir):
-                basename, _ = os.path.splitext(transition_file)
-                parts = basename.split('_')
-                
-                if str(index + 1) in parts[2]:
-                    transition_file_select = os.path.join(transitions_dir, transition_file)
-                    next_input = transition_file_select
-                    print()
-                    files_to_skip = int(parts[2][-1])
-                    break
-            
-            # Do the stitching here with a temporary file 
-            print(current_output)
-            print(next_input)
-            current_output = video_output_path
-            try:
-                # Check if the current and next input files have audio streams
-                next_has_audio = has_audio_track(next_input)
-                current_has_audio = has_audio_track(current_output)
+    # Create a text file with video file list
+    concatInputs = []
+    print(f"STARTING TO CONCATTTT...............")
+    try:
+        # Write the first video file
+        current_output_path = os.path.join(processed_path, video_files[0])
+        first_video_duration = get_duration(current_output_path)
+        temp_output = f"temp_file.mp4"
+        add_silence(current_output_path, temp_output, first_video_duration)
+        print(f"current_output_path {current_output_path}")
 
-                print(f'next_has_audio: {next_has_audio}')
-                print(f'next_has_audio: {current_has_audio}')
+        # Remove the original file and rename the new file to the original name
+        os.remove(current_output_path)
+        os.rename(temp_output, current_output_path)
+        concatInputs.append(current_output_path)
 
-                audio1_path = 'audio1.wav'
-                audio2_path = 'audio2.wav'
-                if current_has_audio:
-                    extract_audio(current_output, audio1_path)
-                if next_has_audio:
-                    extract_audio(next_input, audio2_path)
+        files_to_skip = -1  # Number to always satisfy true at first
 
-                # Construct the FFmpeg filter_complex string based on audio presence
-                if next_has_audio and current_has_audio:
-                    filter_complex = '[0:v][0:a][1:v][1:a]concat=n=2:v=1:a=1[v][a]'
-                    map_options = ['-map', '[v]', '-map', '[a]']
-                    inputs = ['-i', current_output, '-i', next_input, '-i', audio1_path, '-i', audio2_path]
-                
-                elif next_has_audio and not current_has_audio:
-                    filter_complex = '[0:v][1:v][1:a]concat=n=2:v=1:a=0[v][a]'
-                    map_options = ['-map', '[v]', '-map', '[a]']
-                    inputs = ['-i', current_output, '-i', next_input, '-i', audio2_path]
-                
-                elif not next_has_audio and current_has_audio:
-                    filter_complex = '[0:v][0:a][1:v]concat=n=2:v=1:a=0[v][a]'
-                    map_options = ['-map', '[v]', '-map', '[a]']
-                    inputs = ['-i', current_output, '-i', next_input, '-i', audio1_path]
-                
-                else:  # Neither has audio
-                    filter_complex = '[0:v][1:v]concat=n=2:v=1:a=0[v][a]'
-                    map_options = ['-map', '[v]']
-                    inputs = ['-i', current_output, '-i', next_input]
+        for index in range(len(video_files) - 1):
+            next_input_path = os.path.join(processed_path, video_files[index + 1])
 
-                # FFmpeg command setup
-                ffmpeg_command = [
-                    'ffmpeg',
-                    *inputs,
-                    '-filter_complex', filter_complex,
-                    *map_options,
-                    '-c:v', 'libx264',
-                    '-preset', 'veryslow',
-                    '-y',                           # Overwrite output file if exists
-                    video_output_path
-                ]
-                
-                # Execute the FFmpeg command
-                subprocess.run(ffmpeg_command, check=True)
-                
-                # Update current_output to the video_output_path for the next iteration
-                current_output = video_output_path
-                print(f"Successfully concatenated until index {index}")
-                
-            except subprocess.CalledProcessError as e:
-                print("Error occurred while applying crossfade:", e)
-            except Exception as e:
-                print("An unexpected error occurred:", e)
+            if not os.path.isfile(next_input_path):
+                print(f"Warning: Next video file not found: {next_input_path}")
+                continue
 
-                
+            if index + 1 > files_to_skip:
+                # Check for transition files
+                is_transition_included = None
+                for transition_file in os.listdir(TRANSITIONS_DIR):
+                    basename, _ = os.path.splitext(transition_file)
+                    parts = basename.split("_")
+
+                    if str(index + 1) in parts[-1]:
+                        transition_file_path = os.path.join(
+                            TRANSITIONS_DIR, transition_file
+                        )
+                        next_input_path = transition_file_path
+                        files_to_skip = int(parts[-1].split("-")[-1])
+                        print(f"Files to skip: {files_to_skip}")
+
+                        # Write to the text file
+                        concatInputs.append(next_input_path)
+                        is_transition_included = True
+                        break
+                print(f"is_transition_included: {is_transition_included}")
+                if not is_transition_included:
+                    if not has_audio_track(next_input_path):
+                        duration = get_duration(next_input_path)
+                        temp_output = f"temp_file.mp4"
+                        add_silence(next_input_path, temp_output, duration)
+                        print(f"current_output_path {current_output_path}")
+
+                        # Remove the original file and rename the new file to the original name
+                        os.remove(next_input_path)
+                        os.rename(temp_output, next_input_path)
+                    concatInputs.append(next_input_path)
+
+    except Exception as e:
+        print(f"Error writing file list: {e}")
+        return
+
+    filter_complex = ""
+    input_options = ""
+    print(f"concatInputs: {concatInputs}")
+    for i, file in enumerate(concatInputs):
+        input_options += f"-i {file} "
+        filter_complex += f"[{i}:v:0][{i}:a:0]"
+
+    # Add the concat filter
+    filter_complex += f"concat=n={len(concatInputs)}:v=1:a=1[v][a]"
+
+    # Full FFmpeg command
+    command = (
+        f'ffmpeg {input_options} -filter_complex "{filter_complex}" '
+        f"-map [v] -map [a] -c:v libx264 -preset veryslow -c:a aac -b:a 192k {video_output_path}"
+    )
+
+    # Run the FFmpeg command
+    try:
+        result = subprocess.run(command, shell=True, capture_output=True, text=True)
+        if result.returncode != 0:
+            print(f"Error running ffmpeg: {result.stderr}")
+        else:
+            print("Videos stitched successfully!")
+    except Exception as e:
+        print(f"An error occurred while running ffmpeg: {e}")
+
