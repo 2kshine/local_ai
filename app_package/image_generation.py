@@ -1,19 +1,13 @@
-from transformers import pipeline
 import imageio
 import numpy as np
 from PIL import Image
-from app_package.helpers import (
+from app_package.video_process_helpers import (
     detect_people,
     get_focus_box
 )
 
 ZOOM_FACTOR=1.4
 FPS=30
-# def crop_frame(frame, focus_box):
-#     """Crop the frame based on focus box."""
-#     x_min, y_min, x_max, y_max = focus_box
-#     cropped = frame[y_min:y_max, x_min:x_max]
-#     return cropped
 
 def animate_image(image_filepath, saveFilePath, duration, dimension):
     #Process image, check if any peoples are detected, if detected zoom in else out
@@ -107,3 +101,5 @@ def zoom_out(image, saveFilePath, duration, zoom_vertices):
     with imageio.get_writer(saveFilePath, fps=FPS, macro_block_size=1, codec='libx264') as writer:
         for frame in frames:
             writer.append_data(frame)
+
+            

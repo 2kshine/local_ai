@@ -6,6 +6,11 @@ from app_package.directory_helper import AUDIO_DIR, SONGS_DIR
 import os
 import random
 
+from app_package.unique_assets import (
+    asset_tracker,
+    asset_keeper
+)
+
 def find_one_key_moment(audio_file, duration_sec=30, threshold=0.5):
     # Load the audio file
     y, sr = librosa.load(audio_file, sr=None)
@@ -34,14 +39,16 @@ def find_one_key_moment(audio_file, duration_sec=30, threshold=0.5):
     # Return None if no key moment is found
     return None
 
-def process_audio(filename, segment_duration):   
+def process_audio(filename, segment_duration, BASE_FILENAME):   
     try:
         # Pick a random background song 
-        all_files = os.listdir(SONGS_DIR)
+        asset_tracker_result = asset_tracker('background_music', BASE_FILENAME)
+        all_files = [f for f in os.listdir(SONGS_DIR) if f not in asset_tracker_result]
         if not all_files:
             raise FileNotFoundError("No files found in the songs directory.")
         
         random_file = random.choice(all_files)
+        asset_keeper('background_music', BASE_FILENAME, random_file)
         print(f'CHOSEN FILE: {random_file}')
         output_path = os.path.join(AUDIO_DIR, filename)
         audio_path = os.path.join(SONGS_DIR, random_file)
