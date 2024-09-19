@@ -16,6 +16,9 @@ from app_package.insert_subtitles import (
     generate_subtitles,
     add_subtitles
 )
+from app_package.final_reel_render import (
+    final_reel_render
+)
 from app_package.split_av import (
     splitAV_func,
     convert_video_fps
@@ -25,20 +28,7 @@ import glob
 
 app = Flask(__name__)
 
-# Define the directory where audio files will be read from
-AUDIO_DIR = os.path.join(os.path.dirname(__file__), "../audio_files")
-TRANSCRIBED_DIR = os.path.join(os.path.dirname(__file__), "../transcribed_audio")
-RAW_TRANSCRIBED_DIR = os.path.join(os.path.dirname(__file__), "../raw_transcribed_audio")
-INTENT_IDENTIFY_DIR = os.path.join(os.path.dirname(__file__), "../intent-identify")
-RAW_VIDEO_DIR = os.path.join(os.path.dirname(__file__), "../raw_video")
-PROCESSED_VIDEO_DIR = os.path.join(os.path.dirname(__file__), "../processed_video")
-SUBTITLES_PATH_DIR = os.path.join(os.path.dirname(__file__), "../subtitles")
-FRAMES_FOLDER_DIR = os.path.join(os.path.dirname(__file__), "../frames_folder")
-REELS_BLUEPRINT = os.path.join(os.path.dirname(__file__), "../reels_blueprint")
-CROPPED_VIDEO_DIR = os.path.join(os.path.dirname(__file__), "../cropped_video")
-IMAGE_GENERATION_DIR = os.path.join(os.path.dirname(__file__), "../image-generation")
-WORDS_EXTRACTION_DIR = os.path.join(os.path.dirname(__file__), "../extracted_words")
-SOUND_EFFECTS_DIR = os.path.join(os.path.dirname(__file__), "../sound_effects")
+from app_package.directory_helper import SUBTITLES_PATH_DIR, REELS_BLUEPRINT, WORDS_EXTRACTION_DIR
 
 @app.route("/transcribe-audio", methods=["POST"])
 def transcribe():
@@ -155,6 +145,23 @@ def splitAV():
         splitAV_func(filename)
         return jsonify({"message": "Successfully converted video to 30 fps and splitted audio"}), 200
     except Exception as e:
+        return jsonify({"/Failed raw video extraction error:": str(e)}), 500
+
+@app.route("/reel_render", methods=["POST"])
+def final_reel_render_handler():
+
+    data = request.get_json()  # Get JSON body
+    filename = data.get("filename")  # Extract 'subtitles'
+
+    if not filename:
+        return jsonify({"error": "Filename is required"}), 400
+
+    try:
+        # Final reel render with subtitles.
+        final_reel_render(filename)
+        return jsonify({"message": "Reels rendered successfully"}), 200
+    except Exception as e:
+        print(e)
         return jsonify({"/Failed raw video extraction error:": str(e)}), 500
 
 

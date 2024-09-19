@@ -2,9 +2,10 @@ from pydub import AudioSegment
 from pydub.playback import play
 import librosa
 import numpy as np
-from app_package.directory_helper import AUDIO_DIR, SONGS_DIR
+from app_package.directory_helper import AUDIO_DIR, SONGS_DIR, FINAL_VIDEO_DIR
 import os
 import random
+import subprocess
 
 from app_package.unique_assets import (
     asset_tracker,
@@ -100,3 +101,29 @@ def process_audio(filename, segment_duration, BASE_FILENAME):
     except Exception as e:
         print(f"An error occurred: {e}")
 
+
+def stitch_all_audios(individual_directory_name):
+    video_file = os.path.join(FINAL_VIDEO_DIR, f"{individual_directory_name}.mp4")
+    temp_file = os.path.join(FINAL_VIDEO_DIR, f"{individual_directory_name}_temp.mp4")
+    background_music_file = os.path.join(AUDIO_DIR, f"{individual_directory_name}_background.mp3")
+    original_audio_file = os.path.join(AUDIO_DIR, f"{individual_directory_name}.mp3")
+    
+    filter_complex = (
+        f"ffmpeg -i {video_file} -i {background_music_file} -i {original_audio_file} "
+        f"-filter_complex \"[0:a]volume=0.3[a1];"
+        f"[1:a]volume=0.3[a2];"
+        f"[2:a]volume=0.8[a3];"
+        f"[a1][a2]amix=inputs=2:duration=longest[a_mix];"
+        f"[a_mix][a3]amix=inputs=2:duration=longest[a_final]\" "
+        f"-map 0:v:0 -map \"[a_final]\" -c:v copy -c:a aac -b:a 192k {temp_file}"
+    )
+    try:
+        result = subprocess.run(filter_complex, shell=True, check=True, text=True, capture_output=True)
+        print("Command output:", result.stdout)
+    except subprocess.CalledProcessError as e:
+        print("Error occurred:")
+        print("Error message:", e.stderr)
+    
+    # Remove an replace original file
+    os.remove(video_file)
+    os.rename(temp_file, video_file)

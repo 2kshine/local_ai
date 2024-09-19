@@ -128,7 +128,7 @@ def apply_transition(input1, input2, output_path, trans_type, BASE_FILENAME):
     # Offset should be end time - duration of the transition (in seconds)
     calculatePreviousEnd = get_duration(input1)
     calculateCurrentEnd = get_duration(input2)
-    total_duration = calculatePreviousEnd + calculateCurrentEnd    
+    total_duration = calculatePreviousEnd + calculateCurrentEnd - 1.00 #make up for the addition
 
     fade_duration = 1  # Duration of the transition
     input1_audio_length = calculatePreviousEnd - fade_duration
@@ -142,7 +142,7 @@ def apply_transition(input1, input2, output_path, trans_type, BASE_FILENAME):
     asset_keeper('transition_sound_effects', BASE_FILENAME, selected_sound_filename)
 
     #Extend audio and stitch
-    add_silence_and_stitch(selected_sound, offset * 1000, input1, input1_audio_length)
+    add_silence_and_stitch(selected_sound, offset * 1000, input1, input1_audio_length, total_duration)
 
     trimmed_sound_path = os.path.join(TEMPORARY_ACTIONS, 'extended_audio.mp3')
 
@@ -192,7 +192,7 @@ def get_duration(file_path):
         print(f"Error getting audio duration: {e}")
         return None
       
-def add_silence_and_stitch(original_audio_path, silence_duration_ms, input1, input1_duration_minus_fade):
+def add_silence_and_stitch(original_audio_path, silence_duration_ms, input1, input1_duration_minus_fade, current_end_duration):
     extended_audio_path = os.path.join(TEMPORARY_ACTIONS, 'extended_audio.mp3')
     if has_audio_track(input1):
         # Extract audio from input1
@@ -217,7 +217,12 @@ def add_silence_and_stitch(original_audio_path, silence_duration_ms, input1, inp
 
     # Combine audio1 with silence and original_audio
     combined_audio = audio1 + silence + original_audio
+    combined_audio_duration = len(combined_audio)
 
+    totalLength_ms_second_input = current_end_duration * 1000
+
+    if combined_audio_duration > totalLength_ms_second_input:
+        combined_audio = combined_audio[:totalLength_ms_second_input]
     combined_audio.export(extended_audio_path, format="mp3")
     print(f"combined_audio exported!!!!")
 
@@ -229,11 +234,15 @@ def has_audio_track(file_path):
     """Check if the video file has an audio track."""
     try:
         result = subprocess.run(
-            ['ffprobe', '-v', 'error', '-select_streams', 'a:0', '-show_entries', 'stream=codec_type',
+            ['ffprobe', '-v', 'error', '-select_streams', 'a', '-show_entries', 'stream=codec_type',
              '-of', 'default=nk=1:nw=1', file_path],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True
         )
-        return result.stdout.strip() == 'audio'
+        # Check if there is any line with 'audio'
+        return 'audio' in result.stdout.strip()
+    except FileNotFoundError:
+        print("ffprobe is not installed or not found in the system PATH.")
+        return False
     except subprocess.CalledProcessError as e:
         print(f"Error checking audio track: {e}")
         return False

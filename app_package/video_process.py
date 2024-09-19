@@ -40,7 +40,8 @@ from app_package.stitch_transition import (
     get_duration,
 )
 from app_package.background_audio_process import (
-    process_audio
+    process_audio,
+    stitch_all_audios
 )
 
 from app_package.unique_assets import (
@@ -55,8 +56,8 @@ ACTION_STATUS = None
 DIMENSION=(588, 1046)
 BASE_FILENAME = None
 def extract_and_process_frames(video_path, frames_dir, action):
+    global DIMENSION, GLOBAL_FOCUS_BOX
     try:
-        global GLOBAL_FOCUS_BOX
         """Extract and process frames: detect people, apply random zoom effects, resize for TikTok, and save the frame."""
         clip = VideoFileClip(video_path)
         fps = 30
@@ -67,7 +68,9 @@ def extract_and_process_frames(video_path, frames_dir, action):
             frame = clip.get_frame(t / fps)
             frame = np.array(frame)
             people_boxes = detect_people(frame)
-            
+
+            frame_path = os.path.join(frames_dir, f'frame_{t:04d}.png')
+            final_verdict_image_ensure = None
             if people_boxes:
                 if GLOBAL_FOCUS_BOX is None:
                     # Save initial focus box based on the first frame with detected people
@@ -80,18 +83,15 @@ def extract_and_process_frames(video_path, frames_dir, action):
                 cropped_frame = crop_frame(frame, focus_box)
                 image = Image.fromarray(cropped_frame)
 
-                frame_path = os.path.join(frames_dir, f'frame_{t:04d}.png')
 
                 if(action == "ZOOM"):
                     tiktok_ready_image = resize_for_tiktok(image)
                     zoomed_image = zoom_in_from_sides_except_top(tiktok_ready_image, 1.2)
-                    zoomed_image_ensure = ensure_even_dimensions(zoomed_image) #make sure its divisible int
-                    zoomed_image_ensure.save(frame_path, format='PNG', quality=100)
+                    final_verdict_image_ensure = ensure_even_dimensions(zoomed_image) #make sure its divisible int
 
                 else:
                     tiktok_ready_image = resize_for_tiktok(image)
-                    tiktok_ready_image_ensure = ensure_even_dimensions(tiktok_ready_image) #make sure its divisible int
-                    tiktok_ready_image_ensure.save(frame_path, format='PNG', quality=100)
+                    final_verdict_image_ensure = ensure_even_dimensions(tiktok_ready_image) #make sure its divisible int
 
                 # Resize for TikTok aspect ratio
                 
@@ -100,16 +100,20 @@ def extract_and_process_frames(video_path, frames_dir, action):
                 # Save original frame if no people are detected
                 image = Image.fromarray(frame)
                 tiktok_ready_image = resize_for_tiktok(image)
-                image_ensure = ensure_even_dimensions(tiktok_ready_image)
-                frame_path = os.path.join(frames_dir, f'frame_{t:04d}.png')
-                image_ensure.save(frame_path, format='PNG', quality=100)
-    
+                final_verdict_image_ensure = ensure_even_dimensions(tiktok_ready_image)
+            
+            if not DIMENSION:
+                DIMENSION = final_verdict_image_ensure.size
+            else:
+                final_verdict_image_ensure = final_verdict_image_ensure.resize(DIMENSION, Image.LANCZOS)
+         
+            final_verdict_image_ensure.save(frame_path, format='PNG', quality=100)
+
     except Exception as e:
         print(f"Error found while cropping video from extract_and_process_frames for video_path {video_path}: {e}")
         raise e
 
 def create_video_from_frames(output_video_path, frames_dir):
-    global DIMENSION
     try:
         # List and sort frame files
         frame_files = sorted(os.listdir(frames_dir))
@@ -125,7 +129,6 @@ def create_video_from_frames(output_video_path, frames_dir):
                 codec='libx264',
                 preset='veryslow',  # Use 'veryslow' for the best quality
             )
-            DIMENSION = clip.size
         else:
             print("No frames available to create the video.")
     except Exception as e:
@@ -164,9 +167,10 @@ def stitch_transition_helper(action_json, processed_path, individual_directory_n
     #Delete previous files.
     for file_path_to_delete in files_to_delete:
         os.remove(file_path_to_delete)
+
 # Main processing function
 def video_process(filename, reels_script_path):
-    global BASE_FILENAME
+    global BASE_FILENAME, DIMENSION
     input_video = os.path.join(RAW_VIDEO_DIR, filename)
 
     # Load the json script 
@@ -234,34 +238,34 @@ def video_process(filename, reels_script_path):
     #     os.remove(os.path.join(CROPPED_VIDEO_DIR, file))
 
     # Figure out the transition times for all the video segments
-    try:
-        # Creating the action_json
-        action_json = [
-            entry.get('action')
-            for entry in reels_video_script
-        ]        
-        stitch_transition_helper(action_json, processed_path, individual_directory_name)
-    except Exception as e:
-        print(f"Error found while stitching transitions {filename}: {e}")
-        raise e
+    # try:
+    #     # Creating the action_json
+    #     action_json = [
+    #         entry.get('action')
+    #         for entry in reels_video_script
+    #     ]        
+    #     stitch_transition_helper(action_json, processed_path, individual_directory_name)
+    # except Exception as e:
+    #     print(f"Error found while stitching transitions {filename}: {e}")
+    #     raise e
 
     # #Stitch all the clips and figure out if there are any transitions
     # stitch_video_output(individual_directory_name, processed_path)
 
-    #Configure background music based on total video length 
+    # # #Configure background music based on total video length 
     # process_audio(f'{individual_directory_name}_background.mp3', reels_video_script[-1]['end'], BASE_FILENAME)
 
-    #Stitch final video output with the audio 
-    # stitch_all_audios(individual_directory_name, )
+    # #Stitch final video output with the audio 
+    # stitch_all_audios(individual_directory_name)
 
     # # Create substitles based on extracted audio words.
-    # try:
-    #     # Extract words from the extracted audio
-    #     if not (os.path.isfile(extract_words_filepath)):
-    #         extract_words(cropped_video_audio_extract_path, extract_words_filepath)
-    # except Exception as e:
-    #     print(f"Error found while extracting words from audio {filename}: {e}")
-    #     raise e
+    try:
+        # Extract words from the extracted audio
+        if not (os.path.isfile(extract_words_filepath)):
+            extract_words(cropped_video_audio_extract_path, extract_words_filepath, DIMENSION)
+    except Exception as e:
+        print(f"Error found while extracting words from audio {filename}: {e}")
+        raise e
 
 
 
@@ -317,6 +321,10 @@ def stitch_video_output(individual_directory_name, processed_path):
     final_video_filename = f"{individual_directory_name}.mp4"
     video_output_path = os.path.join(FINAL_VIDEO_DIR, final_video_filename)
 
+    # Remove the file if already
+    if(os.path.exists(video_output_path)):
+        os.remove(video_output_path)
+
     video_files_unsorted = [f for f in os.listdir(processed_path) if f.endswith(".mp4")]
     video_files = sorted(video_files_unsorted, key=lambda f: int(re.search(r'_(\d+)\.mp4$', f).group(1)))
 
@@ -338,7 +346,7 @@ def stitch_video_output(individual_directory_name, processed_path):
         os.remove(current_output_path)
         os.rename(temp_output, current_output_path)
         concatInputs.append(current_output_path)
-
+        
         files_to_skip = -1  # Number to always satisfy true at first
         for index in range(len(video_files) - 1):
             next_input_path = os.path.join(processed_path, video_files[index + 1])
@@ -369,6 +377,8 @@ def stitch_video_output(individual_directory_name, processed_path):
                         is_transition_included = True
                         break
                 print(f"is_transition_included: {is_transition_included}")
+                print(f"next_input_path: {next_input_path}")
+                print(f"next_input_path: {has_audio_track(next_input_path)}")
                 if not is_transition_included:
                     if not has_audio_track(next_input_path):
                         duration = get_duration(next_input_path)
@@ -384,7 +394,7 @@ def stitch_video_output(individual_directory_name, processed_path):
     except Exception as e:
         print(f"Error writing file list: {e}")
         return
-
+    print(f"concatInputs: {concatInputs}")
     filter_complex = ""
     input_options = ""
     for i, file in enumerate(concatInputs):
@@ -428,3 +438,4 @@ def handle_image_action (text, image_gen_dir, reels_processed_dir, duration):
     except Exception as e:
         print(f"Error found while handle_image_action from random_file_path {random_file_path}: {e}")
         raise e
+    

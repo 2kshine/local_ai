@@ -108,7 +108,7 @@ def save_transcription(transcription_chunk, transcription_text, filename_chunk, 
     except Exception as e:
         print(f"Error saving transcription: {e}")
 
-def extract_words(audioFilePath, filename_words):
+def extract_words(audioFilePath, filename_words, DIMENSION):
     model = whisper_timestamped.load_model("small.en", device="cpu")
     with torch.no_grad():
         pbar = tqdm(total=1, desc="Transcribing", unit="step", dynamic_ncols=True)
@@ -119,16 +119,19 @@ def extract_words(audioFilePath, filename_words):
         pbar.close()  # Close progress bar
     #Change file extensions for both transcribed and raw transcribed.
     try:
-        extracted_data = []
+        extracted_data = {
+            "subtitles": [],
+            "dimension": DIMENSION
+        }
+
         for segment in transcribedWords['segments']:
             for word in segment['words']:
-                extracted_data.append({
+                extracted_data['subtitles'].append({
                     'text': word['text'],
                     'start': word['start'],
                     'end': word['end']
                 })
-        
-        # Convert list to JSON-formatted string
+
         json_data = json.dumps(extracted_data, indent=4)
 
         # Open the file in write mode and write the string to it
