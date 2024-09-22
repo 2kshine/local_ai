@@ -1,7 +1,7 @@
 import os
 import subprocess
 
-from app_package.directory_helper import FINAL_REEL_RENDER, FINAL_VIDEO_DIR, SUBTITLES_PATH_DIR, TRACK_ASSETS
+from app_package.helpers.directory_helper import FINAL_REEL_RENDER, FINAL_VIDEO_DIR, SUBTITLES_PATH_DIR, TRACK_ASSETS
 
 def final_reel_render(filename):
     basename, _ = os.path.splitext(filename)

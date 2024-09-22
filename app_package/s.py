@@ -1,6 +1,8 @@
 import ffmpeg
 import os
 import json
+
+from app_package.insert_subtitles.helper import format_time
 def generate_ass_subtitles(subtitles_data_filepath, output_file):
     with open(subtitles_data_filepath, 'r') as file:
         data = json.load(file)
@@ -83,15 +85,6 @@ def generate_ass_subtitles(subtitles_data_filepath, output_file):
 
     except Exception as e:
         print(f"Error saving ASS file: {e}")
-
-def format_time(seconds):
-    """Convert time in seconds (float) to ASS time format (HH:MM:SS.CS)."""
-    hours = int(seconds // 3600)
-    minutes = int((seconds % 3600) // 60)
-    centiseconds = int((seconds % 1) * 100)  # Get the centiseconds from the decimal part
-    seconds = int(seconds % 60)  # Get the whole seconds
-    
-    return f"{hours:01}:{minutes:02}:{seconds:02}.{centiseconds:02}"
 
 def add_subtitles(video_file, subtitles_file, output_file):
     """

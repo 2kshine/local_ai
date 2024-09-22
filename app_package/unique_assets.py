@@ -1,4 +1,4 @@
-from app_package.directory_helper import TRACK_ASSETS
+from app_package.helpers.directory_helper import TRACK_ASSETS
 import json
 import os
 

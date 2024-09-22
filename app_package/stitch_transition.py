@@ -1,7 +1,7 @@
 import subprocess
 import os
 import random
-from app_package.directory_helper import SOUND_EFFECTS_DIR, PROCESSED_VIDEO_DIR, TEMPORARY_ACTIONS
+from app_package.helpers.directory_helper import SOUND_EFFECTS_DIR, PROCESSED_VIDEO_DIR, TEMPORARY_ACTIONS
 from pydub import AudioSegment
 
 from app_package.unique_assets import (

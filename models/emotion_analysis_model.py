@@ -1,6 +1,5 @@
 from transformers import AutoTokenizer, AutoModelForSequenceClassification, pipeline
 import torch
-from tqdm import tqdm
 
 # Setup device and model
 device = "cpu"
@@ -34,18 +33,22 @@ pipe_emotion = pipeline(
     device=device
 )
 
-def emotion_func(segment):
+def emotion_analysis(segment):
     sentiments = []
     emotions = []
     
     try:
-        # Perform sentiment analysis
-        sentiments = pipe_sentiment(segment)
+        with torch.no_grad():  # Disable gradient calculation for inference
+            # Perform sentiment analysis
+            sentiments = pipe_sentiment(segment)
 
-        # Perform emotion analysis
-        emotions = pipe_emotion(segment)
-            
+            # Perform emotion analysis
+            emotions = pipe_emotion(segment)
+
+            print(f"Success@models.emotion_analysis :: Success on emotion analysis :: payload: {segment}")
+            return {'sentiments': sentiments[0], 'emotions': emotions[0]}    
     except Exception as e:
-        print(f"Error processing sentence. Error: {e}")
+        print(f"Error@models.emotion_analysis :: Error processing sentence :: error: {e}, payload: {segment}")
+        return False
     
-    return {'sentiments': sentiments[0], 'emotions': emotions[0]}
+    

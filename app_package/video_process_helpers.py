@@ -5,7 +5,7 @@ import subprocess
 import json
 from moviepy.editor import VideoFileClip
 import os 
-from app_package.directory_helper import TEMPORARY_ACTIONS
+from app_package.helpers.directory_helper import TEMPORARY_ACTIONS
 
 
 # Load DETR model

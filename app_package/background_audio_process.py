@@ -2,7 +2,7 @@ from pydub import AudioSegment
 from pydub.playback import play
 import librosa
 import numpy as np
-from app_package.directory_helper import AUDIO_DIR, SONGS_DIR, FINAL_VIDEO_DIR
+from app_package.helpers.directory_helper import AUDIO_DIR, SONGS_DIR, FINAL_VIDEO_DIR
 import os
 import random
 import subprocess

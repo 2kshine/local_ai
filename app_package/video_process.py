@@ -4,7 +4,7 @@ from PIL import Image
 from moviepy.editor import VideoFileClip, ImageSequenceClip
 import json
 import subprocess
-from app_package.directory_helper import RAW_VIDEO_DIR, CROPPED_VIDEO_DIR, PROCESSED_VIDEO_DIR, FRAMES_FOLDER_DIR, AUDIO_DIR, IMAGE_GENERATION_DIR, WORDS_EXTRACTION_DIR, FINAL_VIDEO_DIR, TEMPORARY_ACTIONS, TRACK_ASSETS
+from app_package.helpers.directory_helper import RAW_VIDEO_DIR, CROPPED_VIDEO_DIR, PROCESSED_VIDEO_DIR, FRAMES_FOLDER_DIR, AUDIO_DIR, IMAGE_GENERATION_DIR, WORDS_EXTRACTION_DIR, FINAL_VIDEO_DIR, TEMPORARY_ACTIONS, TRACK_ASSETS
 import re
 import random
 
@@ -31,7 +31,7 @@ from app_package.video_process_helpers import (
     add_silence
 )
 
-from app_package.transcriber import (
+from app_package.transcribe_audio.main import (
     extract_words
 )
 from app_package.stitch_transition import (
@@ -201,24 +201,24 @@ def video_process(filename, reels_script_path):
     if not os.path.exists(processed_path):
         os.makedirs(processed_path)
 
-    # # Crop the video to the specified time range if the file doesnt already exist
+    # Crop the video to the specified time range if the file doesnt already exist
     # It crops the long video into the start and end duration of the entire reel.
-    # try:
-    #     if not (os.path.isfile(cropped_video_path)):
-    #         start_time_sec = reels_result_script['results']['period']['startTime']
-    #         end_time_sec = reels_result_script['results']['period']['endTime']
-    #         crop_video(input_video, cropped_video_path, start_time_sec, end_time_sec)
-    # except Exception as e:
-    #     print(f"Error found while cropping {filename}: {e}")
-    #     raise e
+    try:
+        if not (os.path.isfile(cropped_video_path)):
+            start_time_sec = reels_result_script['results']['period']['startTime']
+            end_time_sec = reels_result_script['results']['period']['endTime']
+            crop_video(input_video, cropped_video_path, start_time_sec, end_time_sec)
+    except Exception as e:
+        print(f"Error found while cropping {filename}: {e}")
+        raise e
     
-    # # Split Audio and video of a raw video if the file doesnt already exist
-    # try:
-    #     if not (os.path.isfile(cropped_video_audio_extract_path)):
-    #         extractedAudioFilePath = splitAV_func_for_video_process(cropped_video_path, cropped_video_audio_extract_path)
-    # except Exception as e:
-    #     print(f"Error found while splitting cropped video to audio {filename}: {e}")
-    #     raise e
+    # Split Audio and video of a raw video if the file doesnt already exist
+    try:
+        if not (os.path.isfile(cropped_video_audio_extract_path)):
+            extractedAudioFilePath = splitAV_func_for_video_process(cropped_video_path, cropped_video_audio_extract_path)
+    except Exception as e:
+        print(f"Error found while splitting cropped video to audio {filename}: {e}")
+        raise e
 
     # Always set the first segment and last segment to be a Normal Action
     reels_video_script[0]['action'] = "NORMAL"
@@ -258,14 +258,7 @@ def video_process(filename, reels_script_path):
     # #Stitch final video output with the audio 
     # stitch_all_audios(individual_directory_name)
 
-    # # Create substitles based on extracted audio words.
-    try:
-        # Extract words from the extracted audio
-        if not (os.path.isfile(extract_words_filepath)):
-            extract_words(cropped_video_audio_extract_path, extract_words_filepath, DIMENSION)
-    except Exception as e:
-        print(f"Error found while extracting words from audio {filename}: {e}")
-        raise e
+
 
 
 
