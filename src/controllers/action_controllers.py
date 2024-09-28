@@ -2,7 +2,10 @@ import os
 from flask import jsonify
 
 # Import packages
-from app_package.helpers.directory_helper import REELS_BLUEPRINT, CONVERTED_FPS_DIR, SUBTITLES_PATH_DIR, WORDS_EXTRACTION_DIR, EXTRACT_AUDIO_DIR, TRANSCRIBED_DIR, INTENT_IDENTIFY_DIR, RAW_VIDEO_DIR
+from app_package.helpers.directory_helper import (REELS_BLUEPRINT, CONVERTED_FPS_DIR, SUBTITLES_PATH_DIR, 
+    WORDS_EXTRACTION_DIR, EXTRACT_AUDIO_DIR, TRANSCRIBED_DIR, INTENT_IDENTIFY_DIR, RAW_VIDEO_DIR,
+    IMAGE_GENERATION_DIR
+)
 
 from app_package.transcribe_audio.main import link_to_reels_action_transcribe_audio
 from app_package.intent_identifier.main import link_to_reels_action_intent_identifier
@@ -10,13 +13,21 @@ from app_package.emotion_analysis.main import link_to_reels_action_emotion_analy
 from app_package.generate_subtitles.main import link_to_reels_action_generate_subtitles
 from app_package.blueprint_process.main import link_to_reels_action_blueprint_process
 from app_package.convert_fps.main import link_to_reels_action_convert_fps
+from app_package.animate_image.main import link_to_reels_action_animate_image
+# from app_package.image_generation.main import link_to_reels_action_image_generation
 
 
 def handle_action(action_function, args, logging_object):
+    action_function_response = action_function(*args)
     if not action_function(*args):
         print(f"Error@controllers.{action_function} :: Action failed :: payload: {logging_object}")
-        return jsonify(f"Error@controllers.{action_function} :: Action failed :: payload: {logging_object}"), 400
-    return jsonify(f"success@controllers.{action_function} :: Action complete :: payload: {logging_object}"), 200
+        return jsonify({
+            "message": f"Error@controllers.{action_function} :: Action failed :: payload: {logging_object}"
+        }), 400
+    return jsonify({
+        "message": f"success@controllers.{action_function} :: Action complete :: payload: {logging_object}",
+        "data": action_function_response
+    }), 200
 
 def transcribe_controller(data):
     filename = data.get("filename")
@@ -164,3 +175,60 @@ def convert_fps_controller(data):
     except Exception as e:
         print(f"Error@controllers.convert_fps_controller :: Internal server error :: error: {e}, payload: {logging_object}")
         return jsonify(f"Error@controllers.convert_fps_controller :: Internal server error :: error: {e}, payload: {logging_object}"), 500
+
+# def generate_image_controller(data):
+#     filename = data.get("filename")
+#     action_type = data.get("action_type")
+#     channel_niche = data.get("channel_niche")
+#     emotion_analysis = data.get("emotion_analysis")
+#     segment_text = data.get("segment_text")
+
+#     basename, _ = os.path.splitext(filename)
+#     logging_object = {"filename": filename, "action_type": action_type, "channel_niche": channel_niche,  "segment_text": segment_text, "emotion_analysis": emotion_analysis}
+
+#     if not segment_text:
+#         return jsonify(f"Error@controllers.generate_image_controller :: Segment Text is required. :: payload: {logging_object}"), 400
+
+#     try:
+#         if action_type == "LINK_TO_REELS":
+#             return handle_action(link_to_reels_action_image_generation, [basename, emotion_analysis, channel_niche, logging_object], logging_object)
+#     except Exception as e:
+#         print(f"Error@controllers.generate_image_controller :: Internal server error :: error: {e}, payload: {logging_object}")
+#         return jsonify(f"Error@controllers.generate_image_controller :: Internal server error :: error: {e}, payload: {logging_object}"), 500
+
+def animate_image_controller(data):
+    filename = data.get("filename")
+    action_type = data.get("action_type")
+    channel_niche = data.get("channel_niche")
+    dimension = data.get("dimension")
+    animation_duration = data.get("animation_duration")
+    fps = data.get("fps")
+
+    basename, _ = os.path.splitext(filename)
+    logging_object = {"filename": filename, "action_type": action_type, "channel_niche": channel_niche, "dimension": dimension, "animation_duration": animation_duration, "fps": fps}
+
+    if not os.path.exists(dimension):
+        print(f"Error@controllers.animate_image_controller :: Image dimension is not provided :: payload: {logging_object, f"filename: {filename}"}")
+        return jsonify(f"Error@controllers.animate_image_controller :: Image dimension is not provided :: payload: {logging_object, f"filename: {filename}"}"), 400
+
+    if not os.path.exists(animation_duration):
+        print(f"Error@controllers.animate_image_controller :: Animation duration is required :: payload: {logging_object, f"filename: {filename}"}")
+        return jsonify(f"Error@controllers.animate_image_controller :: Animation duration is required :: payload: {logging_object, f"filename: {filename}"}"), 400
+    
+    if not os.path.exists(fps):
+        print(f"Error@controllers.animate_image_controller :: Animation FPS is required :: payload: {logging_object, f"filename: {filename}"}")
+        return jsonify(f"Error@controllers.animate_image_controller :: Animation FPS is required :: payload: {logging_object, f"filename: {filename}"}"), 400
+        
+    try:
+        #Check required dependencies exist or not.
+        image_filepath = os.path.join(IMAGE_GENERATION_DIR, filename)
+
+        if not os.path.exists(image_filepath):
+            print(f"Error@controllers.animate_image_controller :: Image file provided doesnt exist or has not been generated :: payload: {logging_object, f"filename: {filename}"}")
+            return jsonify(f"Error@controllers.animate_image_controller :: Image file provided doesnt exist or has not been generated :: payload: {logging_object, f"filename: {filename}"}"), 400
+
+        if action_type == "LINK_TO_REELS":
+            return handle_action(link_to_reels_action_animate_image, [basename, image_filepath, dimension, animation_duration, fps, logging_object], logging_object)
+    except Exception as e:
+        print(f"Error@controllers.animate_image_controller :: Internal server error :: error: {e}, payload: {logging_object}")
+        return jsonify(f"Error@controllers.animate_image_controller :: Internal server error :: error: {e}, payload: {logging_object}"), 500

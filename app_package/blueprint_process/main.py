@@ -4,7 +4,8 @@ from app_package.helpers.directory_helper import PROCESSED_VIDEO_DIR, CROPPED_VI
 from app_package.helpers.json_action import read_json
 from app_package.helpers.crop_video import crop_video
 from app_package.helpers.extract_audio import extract_audio
-from app_package.blueprint_process.helper import extract_frames
+from app_package.blueprint_process.helper import extract_frames, combine_frames
+
 def link_to_reels_action_blueprint_process (basename, reels_blueprint_filepath, video_filepath, logging_object):
     # Read reels_blueprint_filepath of type json
     reels_script = read_json(reels_blueprint_filepath)
@@ -58,7 +59,6 @@ def link_to_reels_action_blueprint_process (basename, reels_blueprint_filepath, 
 
         start_time_sec = segment['start']
         end_time_sec = segment['end'] if not isNextIndexImage else segment['end'] + 1.00 # 1 becacuse it goes through transition.
-        duration = end_time_sec - start_time_sec
 
         #Crop the video to the temporary folder
         if not crop_video(cropped_video_path, temporary_cropped_video_path, start_time_sec, end_time_sec):
@@ -68,7 +68,10 @@ def link_to_reels_action_blueprint_process (basename, reels_blueprint_filepath, 
         if not extract_frames(temporary_cropped_video_path, frames_processed_path, action):
             return False
         
-
+        # Combine processed frames into a video
+        if not combine_frames(reels_processed_directory, frames_processed_path):
+            return False
+        
         #Remove the cropped video 
         os.remove(temporary_cropped_video_path)
 

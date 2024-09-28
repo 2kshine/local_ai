@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify
-from controllers.action_controllers import transcribe_controller, intent_identify_controller, emotion_analysis_controller, generate_subtitles_controller, blueprint_process_controller, convert_fps_controller
+from controllers.action_controllers import (transcribe_controller, intent_identify_controller, emotion_analysis_controller, generate_subtitles_controller, 
+    blueprint_process_controller, convert_fps_controller, generate_image_controller, animate_image_controller)
 
 action_routes = Blueprint('Action Routes', __name__)
 
@@ -27,6 +28,16 @@ def insert_subtitles():
 def blueprint_process():
     data = request.get_json()
     blueprint_process_controller(data)
+
+@action_routes.route("/animate_image", methods=["POST"])
+def animate_image():
+    data = request.get_json()
+    animate_image_controller(data)
+
+# @action_routes.route("/generate_image", methods=["POST"])
+# def generate_image():
+#     data = request.get_json()
+#     generate_image_controller(data)
 
 @action_routes.route("/convert_fps", methods=["POST"])
 def convert_fps():
